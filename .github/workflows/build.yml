@@ -22,15 +22,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        brew install create-dmg
         
     - name: Build with PyInstaller
       run: python build.py
       
-    - name: Upload macOS Artifact
+    - name: Upload macOS DMG
       uses: actions/upload-artifact@v4
       with:
         name: Mouse-Mover-macOS
-        path: dist/Mouse Mover.app
+        path: dist/Mouse-Mover-macOS.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -50,7 +51,7 @@ jobs:
     - name: Build with PyInstaller
       run: python build.py
       
-    - name: Upload Windows Artifact
+    - name: Upload Windows EXE
       uses: actions/upload-artifact@v4
       with:
         name: Mouse-Mover-Windows

@@ -6,6 +6,33 @@
 
 A simple Python GUI application that automatically moves your mouse cursor at configurable intervals to prevent your computer from going to sleep or appearing idle.
 
+## Download
+
+### Pre-built Executables
+
+Download the latest version for your operating system:
+
+- **macOS**: [Mouse-Mover-macOS.dmg](https://github.com/Smandanapu/mouse-mover/actions) - Drag and drop installer
+- **Windows**: [Mouse-Mover-Windows.exe](https://github.com/Smandanapu/mouse-mover/actions) - Standalone executable
+
+> **Note**: To download the executables:
+> 1. Go to the [Actions tab](https://github.com/Smandanapu/mouse-mover/actions)
+> 2. Click on the latest successful workflow run
+> 3. Scroll down to "Artifacts" and download your platform's file
+
+### Installation
+
+**macOS:**
+1. Download `Mouse-Mover-macOS.dmg`
+2. Open the DMG file
+3. Drag "Mouse Mover.app" to your Applications folder
+4. Launch from Applications
+
+**Windows:**
+1. Download `Mouse Mover.exe`
+2. Run the executable (no installation needed)
+3. You may need to allow it in Windows Defender
+
 ## Features
 
 - **Configurable Movement Interval**: Set how often the mouse moves (1-10 seconds)

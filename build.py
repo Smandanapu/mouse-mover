@@ -2,56 +2,69 @@ import PyInstaller.__main__
 import sys
 import os
 import shutil
-import zipfile
+import subprocess
 
-def compress_build():
-    """Compress the built application for distribution."""
-    print("\nCreating compressed archive for distribution...")
+def create_dmg():
+    """Create a DMG installer for macOS."""
+    print("\nCreating DMG installer for distribution...")
     
-    if sys.platform == 'darwin':
-        # macOS: zip the .app bundle
-        app_name = "Mouse Mover.app"
-        zip_name = "Mouse-Mover-macOS.zip"
+    app_name = "Mouse Mover.app"
+    dmg_name = "Mouse-Mover-macOS.dmg"
+    
+    if not os.path.exists(f"dist/{app_name}"):
+        print(f"Error: {app_name} not found in dist folder")
+        return
+    
+    dmg_path = f"dist/{dmg_name}"
+    
+    # Remove old DMG if exists
+    if os.path.exists(dmg_path):
+        os.remove(dmg_path)
+    
+    # Create DMG using create-dmg
+    try:
+        subprocess.run([
+            "create-dmg",
+            "--volname", "Mouse Mover",
+            "--volicon", f"dist/{app_name}/Contents/Resources/icon-windowed.icns",
+            "--window-pos", "200", "120",
+            "--window-size", "600", "400",
+            "--icon-size", "100",
+            "--icon", app_name, "175", "190",
+            "--hide-extension", app_name,
+            "--app-drop-link", "425", "190",
+            dmg_path,
+            f"dist/{app_name}"
+        ], check=True)
+        print(f"✓ Created: {dmg_path}")
+    except subprocess.CalledProcessError:
+        # If create-dmg fails, fall back to hdiutil
+        print("create-dmg failed, using hdiutil as fallback...")
+        temp_dmg = "dist/temp.dmg"
         
-        if os.path.exists(f"dist/{app_name}"):
-            zip_path = f"dist/{zip_name}"
-            
-            # Remove old zip if exists
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-            
-            # Create zip file
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                app_path = f"dist/{app_name}"
-                for root, dirs, files in os.walk(app_path):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, 'dist')
-                        zipf.write(file_path, arcname)
-            
-            print(f"✓ Created: {zip_path}")
-        else:
-            print(f"Warning: {app_name} not found in dist folder")
-            
-    elif sys.platform == 'win32':
-        # Windows: zip the .exe file
-        exe_name = "Mouse Mover.exe"
-        zip_name = "Mouse-Mover-Windows.zip"
+        # Create temporary DMG
+        subprocess.run([
+            "hdiutil", "create",
+            "-volname", "Mouse Mover",
+            "-srcfolder", f"dist/{app_name}",
+            "-ov", "-format", "UDZO",
+            temp_dmg
+        ], check=True)
         
-        if os.path.exists(f"dist/{exe_name}"):
-            zip_path = f"dist/{zip_name}"
-            
-            # Remove old zip if exists
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-            
-            # Create zip file
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(f"dist/{exe_name}", exe_name)
-            
-            print(f"✓ Created: {zip_path}")
-        else:
-            print(f"Warning: {exe_name} not found in dist folder")
+        # Move to final location
+        shutil.move(temp_dmg, dmg_path)
+        print(f"✓ Created: {dmg_path}")
+    except FileNotFoundError:
+        print("Warning: create-dmg not found. Install with: brew install create-dmg")
+        print("Falling back to hdiutil...")
+        subprocess.run([
+            "hdiutil", "create",
+            "-volname", "Mouse Mover",
+            "-srcfolder", f"dist/{app_name}",
+            "-ov", "-format", "UDZO",
+            dmg_path
+        ], check=True)
+        print(f"✓ Created: {dmg_path}")
 
 def build():
     print("Starting build process...")
@@ -73,13 +86,10 @@ def build():
 
     # OS-specific arguments
     if sys.platform == 'darwin':
-        # macOS specific
-        # args.extend([
-        #     '--target-architecture=universal2', # Support both Intel and Apple Silicon
-        # ])
+        # macOS specific - create .app bundle
         print("Configured for macOS build...")
     elif sys.platform == 'win32':
-        # Windows specific
+        # Windows specific - single .exe file
         args.extend([
             '--onefile',  # Single .exe file
         ])
@@ -90,8 +100,15 @@ def build():
     PyInstaller.__main__.run(args)
     print("Build complete! Check the 'dist' folder.")
     
-    # Compress the build
-    compress_build()
+    # Create distribution files
+    if sys.platform == 'darwin':
+        create_dmg()
+    elif sys.platform == 'win32':
+        exe_name = "Mouse Mover.exe"
+        if os.path.exists(f"dist/{exe_name}"):
+            print(f"✓ Windows executable ready: dist/{exe_name}")
+        else:
+            print(f"Warning: {exe_name} not found in dist folder")
 
 if __name__ == "__main__":
     build()
