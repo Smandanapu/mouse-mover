@@ -36,7 +36,7 @@ def create_dmg():
             dmg_path,
             f"dist/{app_name}"
         ], check=True)
-        print(f"✓ Created: {dmg_path}")
+        print(f"[OK] Created: {dmg_path}")
     except subprocess.CalledProcessError:
         # If create-dmg fails, fall back to hdiutil
         print("create-dmg failed, using hdiutil as fallback...")
@@ -53,7 +53,7 @@ def create_dmg():
         
         # Move to final location
         shutil.move(temp_dmg, dmg_path)
-        print(f"✓ Created: {dmg_path}")
+        print(f"[OK] Created: {dmg_path}")
     except FileNotFoundError:
         print("Warning: create-dmg not found. Install with: brew install create-dmg")
         print("Falling back to hdiutil...")
@@ -64,7 +64,7 @@ def create_dmg():
             "-ov", "-format", "UDZO",
             dmg_path
         ], check=True)
-        print(f"✓ Created: {dmg_path}")
+        print(f"[OK] Created: {dmg_path}")
 
 def build():
     print("Starting build process...")
@@ -106,7 +106,7 @@ def build():
     elif sys.platform == 'win32':
         exe_name = "Mouse Mover.exe"
         if os.path.exists(f"dist/{exe_name}"):
-            print(f"✓ Windows executable ready: dist/{exe_name}")
+            print(f"[OK] Windows executable ready: dist/{exe_name}")
         else:
             print(f"Warning: {exe_name} not found in dist folder")
 
