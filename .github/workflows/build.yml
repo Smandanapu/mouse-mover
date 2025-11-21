@@ -1,0 +1,57 @@
+name: Build Executables
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build with PyInstaller
+      run: python build.py
+      
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mouse-Mover-macOS
+        path: dist/Mouse Mover.app
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Build with PyInstaller
+      run: python build.py
+      
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mouse-Mover-Windows
+        path: dist/Mouse Mover.exe
