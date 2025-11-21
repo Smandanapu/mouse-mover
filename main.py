@@ -194,12 +194,55 @@ class RoundedButton(tk.Canvas):
         self._draw()
 
 
+class RoundedFrame(tk.Canvas):
+    def __init__(self, parent, width, height, corner_radius, bg_color, fg_color, padding=10):
+        tk.Canvas.__init__(self, parent, borderwidth=0, relief="flat", highlightthickness=0, bg=bg_color)
+        self.parent = parent
+        self.corner_radius = corner_radius
+        self.bg_color = bg_color
+        self.fg_color = fg_color
+        self.padding = padding
+        
+        # Configure canvas size
+        self.configure(width=width, height=height)
+        
+        # Frame to hold content inside the canvas
+        self.inner_frame = tk.Frame(self, bg=fg_color)
+        self.window_item = self.create_window(padding, padding, window=self.inner_frame, anchor="nw")
+        
+        # Draw rounded background
+        self._draw_rounded_rect(0, 0, width, height, corner_radius, fg_color, "bg_rect")
+        
+        # Configure inner frame size
+        self.itemconfigure(self.window_item, width=width - 2*padding, height=height - 2*padding)
+
+    def _draw_rounded_rect(self, x1, y1, x2, y2, radius, color, tags):
+        points = [
+            x1 + radius, y1,
+            x2 - radius, y1,
+            x2, y1,
+            x2, y1 + radius,
+            x2, y2 - radius,
+            x2, y2,
+            x2 - radius, y2,
+            x1 + radius, y2,
+            x1, y2,
+            x1, y2 - radius,
+            x1, y1 + radius,
+            x1, y1
+        ]
+        return self.create_polygon(points, smooth=True, fill=color, tags=tags)
+
+
 class MouseMoverApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Mouse Mover Pro")
-        self.root.geometry("500x700")
-        self.root.resizable(False, False)
+        self.root.geometry("500x780")
+        self.root.geometry("500x780")
+        # Enable resizing to allow native minimize button to work
+        self.root.resizable(True, True)
+        self.root.minsize(500, 780) # Keep minimum size to prevent layout breaking
         
         # Set modern professional color scheme (Deep Slate Theme)
         self.colors = {
@@ -360,16 +403,18 @@ class MouseMoverApp:
         self.stop_button.pack()
         
         # Settings card
-        settings_card = tk.Frame(
+        settings_card = RoundedFrame(
             main_frame,
-            bg=self.colors['card_bg'],
-            highlightbackground=self.colors['card_border'],
-            highlightthickness=2
+            width=440,
+            height=320,
+            corner_radius=20,
+            bg_color=self.colors['bg_gradient_start'],
+            fg_color=self.colors['card_bg'],
+            padding=25
         )
         settings_card.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
         
-        settings_inner = tk.Frame(settings_card, bg=self.colors['card_bg'])
-        settings_inner.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        settings_inner = settings_card.inner_frame
         
         settings_title = tk.Label(
             settings_inner,
@@ -513,10 +558,13 @@ class MouseMoverApp:
             interval = 2.0
             movement_range = 50
         
+        print(f"[DEBUG] Mouse movement started - Interval: {interval}s, Range: {movement_range}px")
+        
         while self.is_moving:
             try:
                 # Get current mouse position
                 current_x, current_y = self.mouse.position()
+                print(f"[DEBUG] Current position: ({current_x}, {current_y})")
                 
                 # Generate random movement within range
                 dx = random.randint(-movement_range, movement_range)
@@ -530,8 +578,12 @@ class MouseMoverApp:
                 new_x = max(0, min(new_x, screen_width - 1))
                 new_y = max(0, min(new_y, screen_height - 1))
                 
+                print(f"[DEBUG] Moving to: ({new_x}, {new_y}) - Delta: ({dx}, {dy})")
+                
                 # Move mouse smoothly with shorter duration
                 self.mouse.moveTo(new_x, new_y, duration=0.1)
+                
+                print(f"[DEBUG] Move completed. Waiting {interval}s...")
                 
                 # Wait for the specified interval with responsive checking
                 start_time = time.time()
@@ -539,8 +591,13 @@ class MouseMoverApp:
                     time.sleep(0.1)  # Check every 100ms for stop signal
                 
             except Exception as e:
-                print(f"Error moving mouse: {e}")
+                print(f"[ERROR] Error moving mouse: {e}")
+                import traceback
+                traceback.print_exc()
                 break
+        
+        print("[DEBUG] Mouse movement stopped")
+    
     
     def on_closing(self):
         self.stop_moving()
