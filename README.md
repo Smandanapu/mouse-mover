@@ -33,6 +33,34 @@ Download the latest version for your operating system:
 2. Run the executable (no installation needed)
 3. You may need to allow it in Windows Defender
 
+### macOS Security Warning
+
+When you first open the app on macOS, you may see a warning: **"Apple could not verify 'Mouse Mover.app' is free of malware"**
+
+This is normal for apps that aren't code-signed with an Apple Developer certificate. The app is safe to use. Here's how to open it:
+
+**Method 1: Right-Click to Open (Easiest)**
+1. Locate "Mouse Mover.app" in your Applications folder
+2. **Right-click** (or Control-click) on the app
+3. Select **"Open"** from the menu
+4. Click **"Open"** in the security dialog that appears
+5. The app will now open and remember this choice for future launches
+
+**Method 2: System Settings**
+1. Try to open the app normally (you'll see the warning)
+2. Go to **System Settings** → **Privacy & Security**
+3. Scroll down to the **Security** section
+4. You'll see a message about "Mouse Mover.app" being blocked
+5. Click **"Open Anyway"**
+6. Confirm by clicking **"Open"** in the dialog
+
+**Method 3: Remove Quarantine Attribute (Advanced)**
+```bash
+xattr -d com.apple.quarantine "/Applications/Mouse Mover.app"
+```
+
+> **Note**: This warning appears because the app is not code-signed with an Apple Developer certificate ($99/year). The app is open source and safe to use.
+
 ## Features
 
 - **Configurable Movement Interval**: Set how often the mouse moves (1-10 seconds)
