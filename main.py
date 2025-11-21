@@ -1,6 +1,6 @@
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import threading
 import time
 import random
@@ -47,19 +47,12 @@ class MacOSMouseControl:
     def moveTo(x, y, duration=0.1):
         """Move mouse to position using AppleScript"""
         try:
-            # Use AppleScript to move mouse
-            script = f'''
-            tell application "System Events"
-                set mouseLoc to {{{x}, {y}}}
-                click at mouseLoc
-            end tell
-            '''
-            # Use a simpler approach with cliclick if available, otherwise AppleScript
-            try:
-                subprocess.run(['cliclick', f'm:{x},{y}'], check=True, timeout=1)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Fallback to AppleScript
-                subprocess.run(['osascript', '-e', f'tell application "System Events" to set mouse position to {{{x}, {y}}}'], timeout=1)
+            # Use AppleScript to move mouse (native macOS method)
+            # We use 'set mouse position' which is standard for System Events
+            subprocess.run([
+                'osascript', '-e', 
+                f'tell application "System Events" to set mouse position to {{{x}, {y}}}'
+            ], check=True, timeout=1)
         except Exception as e:
             print(f"Error moving mouse: {e}")
     
@@ -260,13 +253,44 @@ class MouseMoverApp:
         
         # Configure root background
         self.root.configure(bg=self.colors['bg_gradient_start'])
-        
-        # Center the window
-        self.root.eval('tk::PlaceWindow . center')
+        # Bind Map event to handle restore from minimize
+        self.root.bind("<Map>", self._on_window_map)
         
         self.is_moving = False
         self.move_thread = None
         
+        # Check for accessibility permissions on startup
+        self.check_permissions()
+        
+        # Initialize mouse and UI
+        self._init_mouse_control()
+
+    def check_permissions(self):
+        """Check if the app has accessibility permissions"""
+        if platform.system() == 'Darwin':
+            try:
+                # Try to get mouse position via AppleScript - this requires permissions
+                result = subprocess.run([
+                    'osascript', '-e',
+                    'tell application "System Events" to get mouse position'
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                    self.show_permission_warning()
+            except Exception:
+                self.show_permission_warning()
+
+    def show_permission_warning(self):
+        """Show a warning dialog about missing permissions"""
+        messagebox.showwarning(
+            "Permissions Required",
+            "Mouse Mover needs Accessibility permissions to work.\n\n"
+            "Please go to:\n"
+            "System Settings > Privacy & Security > Accessibility\n"
+            "and enable 'Mouse Mover'."
+        )
+        
+    def _init_mouse_control(self):
         # Initialize mouse control
         if pyautogui:
             self.mouse = pyautogui
