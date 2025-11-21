@@ -623,6 +623,25 @@ class MouseMoverApp:
         print("[DEBUG] Mouse movement stopped")
     
     
+    def _on_window_map(self, event):
+        """Handle window restore event"""
+        if self.root.state() == 'normal':
+            print("[DEBUG] Window restored - performing aggressive refresh")
+            
+            # Force a redraw of all widgets
+            self.root.update()
+            
+            # Re-bind events for buttons just in case
+            if hasattr(self, 'start_button'):
+                self.start_button.bind("<ButtonPress-1>", self.start_button._on_press)
+                self.start_button.bind("<ButtonRelease-1>", self.start_button._on_release)
+            if hasattr(self, 'stop_button'):
+                self.stop_button.bind("<ButtonPress-1>", self.stop_button._on_press)
+                self.stop_button.bind("<ButtonRelease-1>", self.stop_button._on_release)
+            
+            # Force focus
+            self.root.focus_force()
+
     def on_closing(self):
         self.stop_moving()
         self.root.destroy()
