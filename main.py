@@ -1,659 +1,368 @@
-
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, scrolledtext
 import threading
 import time
 import random
+import platform
+import sys
+import subprocess
+from datetime import datetime
 
+# Try to import pyautogui
 try:
     import pyautogui
+    PYAUTOGUI_AVAILABLE = True
 except ImportError:
-    print("pyautogui not installed. Using macOS-native mouse control.")
-    pyautogui = None
+    PYAUTOGUI_AVAILABLE = False
 
-import subprocess
-import platform
-
-class MacOSMouseControl:
-    """Fallback mouse control using macOS native methods when pyautogui is unavailable"""
-    
-    @staticmethod
-    def position():
-        """Get current mouse position using AppleScript"""
-        try:
-            script = '''
-            tell application "System Events"
-                set mousePos to (do shell script "echo $((`system_profiler SPDisplaysDataType | grep Resolution | head -1 | awk '{print $2}'` / 2)), $((`system_profiler SPDisplaysDataType | grep Resolution | head -1 | awk '{print $4}'` / 2))")
-                return mousePos
-            end tell
-            '''
-            # Simplified approach - get mouse position via CGEvent
-            result = subprocess.run([
-                'osascript', '-e',
-                'tell application "System Events" to set mousePosition to (mouse position as list)'
-            ], capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                pos_str = result.stdout.strip()
-                # Parse "x, y" format
-                x, y = pos_str.split(', ')
-                return (int(float(x)), int(float(y)))
-            else:
-                return (500, 500)  # Default fallback position
-        except:
-            return (500, 500)  # Default fallback position
-    
-    @staticmethod
-    def moveTo(x, y, duration=0.1):
-        """Move mouse to position using AppleScript"""
-        try:
-            # Use AppleScript to move mouse (native macOS method)
-            # We use 'set mouse position' which is standard for System Events
-            subprocess.run([
-                'osascript', '-e', 
-                f'tell application "System Events" to set mouse position to {{{x}, {y}}}'
-            ], check=True, timeout=1)
-        except Exception as e:
-            print(f"Error moving mouse: {e}")
-    
-    @staticmethod
-    def size():
-        """Get screen size"""
-        try:
-            result = subprocess.run([
-                'osascript', '-e',
-                'tell application "Finder" to get bounds of window of desktop'
-            ], capture_output=True, text=True, timeout=2)
-            
-            if result.returncode == 0:
-                bounds = result.stdout.strip().split(', ')
-                width = int(bounds[2]) - int(bounds[0])
-                height = int(bounds[3]) - int(bounds[1])
-                return (width, height)
-            else:
-                return (1920, 1080)  # Default fallback
-        except:
-            return (1920, 1080)  # Default fallback
-
-class RoundedButton(tk.Canvas):
-    def __init__(self, parent, width, height, corner_radius, padding=0, color="#000000", text_color="#ffffff", border_color=None, border_width=0, text="", command=None):
-        tk.Canvas.__init__(self, parent, borderwidth=0, relief="flat", highlightthickness=0, bg=parent["bg"])
-        self.command = command
-        self.width = width
-        self.height = height
-        self.corner_radius = corner_radius
-        self.padding = padding
-        self.color = color
-        self.original_color = color
-        self.text_color = text_color
-        self.border_color = border_color
-        self.border_width = border_width
-        self.text = text
-        self.state = "normal"
-
-        # Resize canvas
-        self.configure(width=width, height=height)
-
-        # Bind events
-        self.bind("<ButtonPress-1>", self._on_press)
-        self.bind("<ButtonRelease-1>", self._on_release)
-        self.bind("<Enter>", self._on_hover)
-        self.bind("<Leave>", self._on_leave)
-
-        self._draw()
-
-    def _draw(self):
-        self.delete("all")
-        
-        # Determine colors based on state
-        if self.state == "disabled":
-            fill_color = "#334155" # Slate 700
-            text_color = "#64748b" # Slate 500
-            border_c = "#475569"   # Slate 600
-        else:
-            fill_color = self.color
-            text_color = self.text_color
-            border_c = self.border_color if self.border_color else fill_color
-
-        # Draw border if needed (by drawing a larger rect behind)
-        if self.border_width > 0:
-             self._draw_rounded_rect(2, 2, self.width-2, self.height-2, self.corner_radius, border_c)
-             # Inner rect
-             offset = 2 + self.border_width
-             self._draw_rounded_rect(offset, offset, self.width-offset, self.height-offset, self.corner_radius - self.border_width, fill_color)
-        else:
-             self._draw_rounded_rect(2, 2, self.width-2, self.height-2, self.corner_radius, fill_color)
-        
-        # Draw text
-        self.create_text(self.width/2, self.height/2, text=self.text, fill=text_color, font=("Helvetica", 16, "bold"))
-
-    def _draw_rounded_rect(self, x1, y1, x2, y2, radius, color):
-        points = [
-            x1 + radius, y1,
-            x2 - radius, y1,
-            x2, y1,
-            x2, y1 + radius,
-            x2, y2 - radius,
-            x2, y2,
-            x2 - radius, y2,
-            x1 + radius, y2,
-            x1, y2,
-            x1, y2 - radius,
-            x1, y1 + radius,
-            x1, y1
-        ]
-        return self.create_polygon(points, smooth=True, fill=color)
-
-    def _on_press(self, event):
-        if self.state != "disabled":
-            self.configure(relief="sunken")
-            if self.command:
-                self.command()
-
-    def _on_release(self, event):
-        if self.state != "disabled":
-            self.configure(relief="flat")
-
-    def _on_hover(self, event):
-        if self.state != "disabled":
-            # Brighten color
-            self.color = self._adjust_color(self.original_color, 20)
-            self._draw()
-
-    def _on_leave(self, event):
-        if self.state != "disabled":
-            self.color = self.original_color
-            self._draw()
-
-    def _adjust_color(self, hex_color, factor):
-        # Simple color adjustment
-        r = int(hex_color[1:3], 16)
-        g = int(hex_color[3:5], 16)
-        b = int(hex_color[5:7], 16)
-        
-        r = min(255, r + factor)
-        g = min(255, g + factor)
-        b = min(255, b + factor)
-        
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def set_state(self, state):
-        self.state = state
-        self._draw()
-        
-    def set_color(self, color):
-        self.color = color
-        self.original_color = color
-        self._draw()
-
-
-class RoundedFrame(tk.Canvas):
-    def __init__(self, parent, width, height, corner_radius, bg_color, fg_color, padding=10):
-        tk.Canvas.__init__(self, parent, borderwidth=0, relief="flat", highlightthickness=0, bg=bg_color)
-        self.parent = parent
-        self.corner_radius = corner_radius
-        self.bg_color = bg_color
-        self.fg_color = fg_color
-        self.padding = padding
-        
-        # Configure canvas size
-        self.configure(width=width, height=height)
-        
-        # Frame to hold content inside the canvas
-        self.inner_frame = tk.Frame(self, bg=fg_color)
-        self.window_item = self.create_window(padding, padding, window=self.inner_frame, anchor="nw")
-        
-        # Draw rounded background
-        self._draw_rounded_rect(0, 0, width, height, corner_radius, fg_color, "bg_rect")
-        
-        # Configure inner frame size
-        self.itemconfigure(self.window_item, width=width - 2*padding, height=height - 2*padding)
-
-    def _draw_rounded_rect(self, x1, y1, x2, y2, radius, color, tags):
-        points = [
-            x1 + radius, y1,
-            x2 - radius, y1,
-            x2, y1,
-            x2, y1 + radius,
-            x2, y2 - radius,
-            x2, y2,
-            x2 - radius, y2,
-            x1 + radius, y2,
-            x1, y2,
-            x1, y2 - radius,
-            x1, y1 + radius,
-            x1, y1
-        ]
-        return self.create_polygon(points, smooth=True, fill=color, tags=tags)
-
+# Try to import Quartz for macOS fallback
+try:
+    import Quartz
+    QUARTZ_AVAILABLE = True
+except ImportError:
+    QUARTZ_AVAILABLE = False
 
 class MouseMoverApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Mouse Mover Pro")
-        self.root.geometry("500x780")
-        self.root.geometry("500x780")
-        # Enable resizing to allow native minimize button to work
-        self.root.resizable(True, True)
-        self.root.minsize(500, 780) # Keep minimum size to prevent layout breaking
+        self.root.title("Mouse Jiggler")
+        self.root.geometry("500x700")
+        self.root.minsize(400, 600)
         
-        # Set modern professional color scheme (Deep Slate Theme)
+        # Dark theme colors
         self.colors = {
-            'bg_gradient_start': '#0f172a', # Slate 900
-            'bg_gradient_end': '#1e293b',   # Slate 800
-            'accent_primary': '#38bdf8',    # Sky 400
-            'accent_secondary': '#7dd3fc',  # Sky 300
-            'text_primary': '#f8fafc',      # Slate 50
-            'text_secondary': '#94a3b8',    # Slate 400
-            'success': '#10b981',           # Emerald 500
-            'danger': '#ef4444',            # Red 500
-            'card_bg': '#1e293b',           # Slate 800
-            'card_border': '#334155'        # Slate 700
+            'bg': '#1e293b',      # Slate 800
+            'fg': '#f8fafc',      # Slate 50
+            'accent': '#38bdf8',  # Sky 400
+            'success': '#22c55e', # Green 500
+            'danger': '#ef4444',  # Red 500
+            'button': '#334155',  # Slate 700
+            'button_text': '#ffffff'
         }
         
-        # Configure root background
-        self.root.configure(bg=self.colors['bg_gradient_start'])
-        # Bind Map event to handle restore from minimize
-        self.root.bind("<Map>", self._on_window_map)
+        self.root.configure(bg=self.colors['bg'])
         
         self.is_moving = False
         self.move_thread = None
         
-        # Check for accessibility permissions on startup
-        self.check_permissions()
+        # Initialize mouse control
+        self.init_mouse()
         
-        # Initialize mouse and UI
-        self._init_mouse_control()
+        # Log version
+        self.log("Mouse Jiggler v1.0 Started")
+        
+        # Setup UI
+        self.setup_ui()
+        
+        # Check permissions
+        self.check_permissions()
+
+    def init_mouse(self):
+        self.mouse = None
+        if PYAUTOGUI_AVAILABLE:
+            self.mouse = pyautogui
+            pyautogui.FAILSAFE = False
+            self.log("Initialized PyAutoGUI")
+        elif platform.system() == 'Darwin':
+            self.log("PyAutoGUI not found, using macOS fallback")
+        else:
+            self.log("Error: No mouse control available")
+
+    def log(self, message):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        full_msg = f"[{timestamp}] {message}"
+        print(full_msg)
+        if hasattr(self, 'log_area'):
+            self.log_area.configure(state='normal')
+            self.log_area.insert(tk.END, full_msg + "\n")
+            self.log_area.see(tk.END)
+            self.log_area.configure(state='disabled')
 
     def check_permissions(self):
-        """Check if the app has accessibility permissions"""
         if platform.system() == 'Darwin':
             try:
-                # Try to get mouse position via AppleScript - this requires permissions
-                result = subprocess.run([
+                subprocess.run([
                     'osascript', '-e',
                     'tell application "System Events" to get mouse position'
-                ], capture_output=True, text=True)
-                
-                if result.returncode != 0:
-                    self.show_permission_warning()
-            except Exception:
-                self.show_permission_warning()
+                ], capture_output=True, timeout=1)
+            except Exception as e:
+                self.log(f"Permission check warning: {e}")
 
-    def show_permission_warning(self):
-        """Show a warning dialog about missing permissions"""
-        messagebox.showwarning(
-            "Permissions Required",
-            "Mouse Mover needs Accessibility permissions to work.\n\n"
-            "Please go to:\n"
-            "System Settings > Privacy & Security > Accessibility\n"
-            "and enable 'Mouse Mover'."
-        )
-        
-    def _init_mouse_control(self):
-        # Initialize mouse control
-        if pyautogui:
-            self.mouse = pyautogui
-            # Disable pyautogui failsafe for smoother operation
-            pyautogui.FAILSAFE = False
-        elif platform.system() == 'Darwin':  # macOS
-            self.mouse = MacOSMouseControl()
-        else:
-            self.mouse = None
-        
-        self.setup_ui()
-    
     def setup_ui(self):
-        # Main container with gradient background
-        main_frame = tk.Frame(self.root, bg=self.colors['bg_gradient_start'])
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
-        
-        # Header section with icon and title
-        header_frame = tk.Frame(main_frame, bg=self.colors['bg_gradient_start'], height=140)
-        header_frame.pack(fill=tk.X, padx=30, pady=(30, 20))
-        
-        # Load and display icon
-        try:
-            icon_path = "/Users/satmac/.gemini/antigravity/brain/2e0f67ce-93b1-4b7c-88ac-47ec2a5a440a/mouse_mover_icon_1763747272841.png"
-            from PIL import Image, ImageTk
-            icon_image = Image.open(icon_path)
-            icon_image = icon_image.resize((80, 80), Image.Resampling.LANCZOS)
-            self.icon_photo = ImageTk.PhotoImage(icon_image)
-            icon_label = tk.Label(header_frame, image=self.icon_photo, bg=self.colors['bg_gradient_start'])
-            icon_label.pack(pady=(0, 15))
-        except Exception as e:
-            print(f"Could not load icon: {e}")
-            # Fallback: Create a styled text icon
-            icon_label = tk.Label(
-                header_frame, 
-                text="🖱️", 
-                font=("SF Pro Display", 48),
-                bg=self.colors['bg_gradient_start'],
-                fg=self.colors['text_secondary']
-            )
-            icon_label.pack(pady=(0, 15))
+        # Main Container
+        main_frame = tk.Frame(self.root, bg=self.colors['bg'], padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
         title_label = tk.Label(
-            header_frame,
-            text="Mouse Mover Pro",
-            font=("SF Pro Display", 28, "bold"),
-            bg=self.colors['bg_gradient_start'],
-            fg=self.colors['text_primary']
+            main_frame, 
+            text="Mouse Jiggler", 
+            font=("Helvetica", 24, "bold"),
+            bg=self.colors['bg'], 
+            fg=self.colors['fg']
         )
-        title_label.pack()
+        title_label.pack(pady=(0, 10))
         
-        # Subtitle
-        subtitle_label = tk.Label(
-            header_frame,
-            text="Automated Cursor Movement",
-            font=("SF Pro Text", 12),
-            bg=self.colors['bg_gradient_start'],
-            fg=self.colors['text_secondary']
-        )
-        subtitle_label.pack(pady=(5, 0))
-        
-        # Status card
-        status_card = tk.Frame(
-            main_frame,
-            bg=self.colors['card_bg'],
-            highlightbackground=self.colors['card_border'],
-            highlightthickness=2
-        )
-        status_card.pack(fill=tk.X, padx=30, pady=(0, 20))
-        
-        status_inner = tk.Frame(status_card, bg=self.colors['card_bg'])
-        status_inner.pack(fill=tk.X, padx=20, pady=15)
-        
-        status_title = tk.Label(
-            status_inner,
-            text="STATUS",
-            font=("SF Pro Text", 10, "bold"),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_secondary']
-        )
-        status_title.pack(anchor=tk.W)
-        
+        # Status
         self.status_label = tk.Label(
-            status_inner,
-            text="● Inactive",
-            font=("SF Pro Display", 16, "bold"),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_secondary']
-        )
-        self.status_label.pack(anchor=tk.W, pady=(5, 0))
-        
-        # Control buttons frame - centered layout
-        buttons_frame = tk.Frame(main_frame, bg=self.colors['bg_gradient_start'])
-        buttons_frame.pack(fill=tk.X, padx=30, pady=(0, 25))
-        
-        # Create a container for centered buttons
-        button_container = tk.Frame(buttons_frame, bg=self.colors['bg_gradient_start'])
-        button_container.pack()
-        
-        # Start button (Custom Rounded)
-        start_frame = tk.Frame(button_container, bg=self.colors['bg_gradient_start'])
-        start_frame.pack(side=tk.LEFT, padx=15)
-        
-        self.start_button = RoundedButton(
-            start_frame,
-            width=160,
-            height=60,
-            corner_radius=30,
-            color=self.colors['success'],
-            text="START",
-            command=self.start_moving,
-            border_color="#059669", # Emerald 600
-            border_width=2
-        )
-        self.start_button.pack()
-        
-        # Stop button (Custom Rounded)
-        stop_frame = tk.Frame(button_container, bg=self.colors['bg_gradient_start'])
-        stop_frame.pack(side=tk.LEFT, padx=15)
-        
-        self.stop_button = RoundedButton(
-            stop_frame,
-            width=160,
-            height=60,
-            corner_radius=30,
-            color=self.colors['danger'],
-            text="STOP",
-            command=self.stop_moving,
-            border_color="#dc2626", # Red 600
-            border_width=2
-        )
-        self.stop_button.set_state("disabled")
-        self.stop_button.pack()
-        
-        # Settings card
-        settings_card = RoundedFrame(
             main_frame,
-            width=440,
-            height=320,
-            corner_radius=20,
-            bg_color=self.colors['bg_gradient_start'],
-            fg_color=self.colors['card_bg'],
-            padding=25
+            text="Inactive",
+            font=("Helvetica", 16),
+            bg=self.colors['bg'],
+            fg=self.colors['fg']
         )
-        settings_card.pack(fill=tk.BOTH, expand=True, padx=30, pady=(0, 30))
+        self.status_label.pack(pady=(0, 20))
         
-        settings_inner = settings_card.inner_frame
+        # Controls Frame
+        controls_frame = tk.Frame(main_frame, bg=self.colors['bg'])
+        controls_frame.pack(fill=tk.X, pady=10)
         
-        settings_title = tk.Label(
-            settings_inner,
-            text="SETTINGS",
-            font=("SF Pro Text", 10, "bold"),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_secondary']
+        # Start Button - Canvas-based for color support on macOS
+        start_frame = tk.Frame(controls_frame, bg=self.colors['bg'])
+        start_frame.pack(side=tk.LEFT, padx=10, expand=True)
+        
+        self.start_canvas = tk.Canvas(start_frame, width=150, height=60, bg=self.colors['bg'], highlightthickness=0)
+        self.start_canvas.pack()
+        
+        # Draw green button
+        self.start_rect = self.start_canvas.create_rectangle(
+            5, 5, 145, 55, 
+            fill='#22c55e', 
+            outline='#16a34a', 
+            width=2
         )
-        settings_title.pack(anchor=tk.W, pady=(0, 15))
-        
-        # Interval setting
-        interval_frame = tk.Frame(settings_inner, bg=self.colors['card_bg'])
-        interval_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        interval_label = tk.Label(
-            interval_frame,
-            text="Movement Interval",
-            font=("SF Pro Text", 13),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_primary']
+        self.start_text = self.start_canvas.create_text(
+            75, 30, 
+            text="START", 
+            fill='white', 
+            font=("Helvetica", 16, "bold")
         )
-        interval_label.pack(anchor=tk.W)
+        self.start_canvas.bind("<Button-1>", lambda e: self.start_moving())
+        self.start_canvas.bind("<Enter>", lambda e: self.start_canvas.itemconfig(self.start_rect, fill='#16a34a'))
+        self.start_canvas.bind("<Leave>", lambda e: self.start_canvas.itemconfig(self.start_rect, fill='#22c55e'))
+        self.start_canvas.config(cursor="hand2")
         
-        interval_desc = tk.Label(
-            interval_frame,
-            text="Time between movements (seconds)",
-            font=("SF Pro Text", 10),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_secondary']
+        # Stop Button - Canvas-based for color support on macOS
+        stop_frame = tk.Frame(controls_frame, bg=self.colors['bg'])
+        stop_frame.pack(side=tk.LEFT, padx=10, expand=True)
+        
+        self.stop_canvas = tk.Canvas(stop_frame, width=150, height=60, bg=self.colors['bg'], highlightthickness=0)
+        self.stop_canvas.pack()
+        
+        # Draw red button
+        self.stop_rect = self.stop_canvas.create_rectangle(
+            5, 5, 145, 55, 
+            fill='#ef4444', 
+            outline='#dc2626', 
+            width=2
         )
-        interval_desc.pack(anchor=tk.W, pady=(2, 8))
+        self.stop_text = self.stop_canvas.create_text(
+            75, 30, 
+            text="STOP", 
+            fill='white', 
+            font=("Helvetica", 16, "bold")
+        )
+        self.stop_canvas.bind("<Button-1>", lambda e: self.stop_moving())
+        self.stop_canvas.bind("<Enter>", lambda e: self.stop_canvas.itemconfig(self.stop_rect, fill='#dc2626'))
+        self.stop_canvas.bind("<Leave>", lambda e: self.stop_canvas.itemconfig(self.stop_rect, fill='#ef4444'))
+        self.stop_canvas.config(cursor="hand2")
         
+        # Initially disable stop button
+        self.stop_canvas.itemconfig(self.stop_rect, fill='#4b5563', outline='#374151')
+        self.stop_canvas.itemconfig(self.stop_text, fill='#9ca3af')
+        self.stop_canvas.unbind("<Button-1>")
+        self.stop_canvas.config(cursor="arrow")
+        
+        # Settings
+        settings_frame = tk.LabelFrame(
+            main_frame, 
+            text="Settings", 
+            bg=self.colors['bg'], 
+            fg=self.colors['fg'],
+            font=("Helvetica", 12)
+        )
+        settings_frame.pack(fill=tk.X, pady=20, padx=5)
+        
+        # Interval
+        tk.Label(settings_frame, text="Interval (sec):", bg=self.colors['bg'], fg=self.colors['fg']).pack(anchor=tk.W, padx=10, pady=(10, 0))
         self.interval_var = tk.StringVar(value="2")
-        interval_spinbox = tk.Spinbox(
-            interval_frame,
-            from_=1,
-            to=10,
-            textvariable=self.interval_var,
-            font=("SF Pro Text", 14),
-            bg=self.colors['bg_gradient_start'],
-            fg=self.colors['text_primary'],
-            buttonbackground=self.colors['accent_secondary'],
-            relief=tk.FLAT,
-            width=15,
-            insertbackground=self.colors['text_primary']
-        )
-        interval_spinbox.pack(anchor=tk.W, ipady=8)
+        tk.Spinbox(settings_frame, from_=1, to=60, textvariable=self.interval_var, width=10).pack(anchor=tk.W, padx=10, pady=(0, 10))
         
-        # Range setting
-        range_frame = tk.Frame(settings_inner, bg=self.colors['card_bg'])
-        range_frame.pack(fill=tk.X)
-        
-        range_label = tk.Label(
-            range_frame,
-            text="Movement Range",
-            font=("SF Pro Text", 13),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_primary']
-        )
-        range_label.pack(anchor=tk.W)
-        
-        range_desc = tk.Label(
-            range_frame,
-            text="Maximum distance to move cursor (pixels)",
-            font=("SF Pro Text", 10),
-            bg=self.colors['card_bg'],
-            fg=self.colors['text_secondary']
-        )
-        range_desc.pack(anchor=tk.W, pady=(2, 8))
-        
+        # Range
+        tk.Label(settings_frame, text="Range (pixels):", bg=self.colors['bg'], fg=self.colors['fg']).pack(anchor=tk.W, padx=10)
         self.range_var = tk.StringVar(value="50")
-        range_spinbox = tk.Spinbox(
-            range_frame,
-            from_=10,
-            to=200,
-            textvariable=self.range_var,
-            font=("SF Pro Text", 14),
-            bg=self.colors['bg_gradient_start'],
-            fg=self.colors['text_primary'],
-            buttonbackground=self.colors['accent_secondary'],
-            relief=tk.FLAT,
-            width=15,
-            insertbackground=self.colors['text_primary']
+        tk.Spinbox(settings_frame, from_=10, to=500, textvariable=self.range_var, width=10).pack(anchor=tk.W, padx=10, pady=(0, 10))
+
+        # Test Button
+        tk.Button(
+            settings_frame,
+            text="Test Single Move",
+            command=self.test_move,
+            bg=self.colors['accent'],
+            fg='black'
+        ).pack(pady=10)
+
+        # Log Area
+        log_frame = tk.LabelFrame(
+            main_frame,
+            text="Activity Log",
+            bg=self.colors['bg'],
+            fg=self.colors['fg']
         )
-        range_spinbox.pack(anchor=tk.W, ipady=8)
-    
+        log_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.log_area = scrolledtext.ScrolledText(
+            log_frame,
+            height=10,
+            bg='#0f172a',
+            fg='#94a3b8',
+            font=("Menlo", 10),
+            state='disabled'
+        )
+        self.log_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
     def start_moving(self):
-        if not self.mouse:
-            self.status_label.config(
-                text="● Error: Not Available",
-                fg=self.colors['danger']
-            )
+        if self.is_moving:
             return
-        
-        # Immediate UI feedback
-        self.start_button.set_state("disabled")
-        self.stop_button.set_state("normal")
-        self.status_label.config(
-            text="● Starting...",
-            fg='#fbbf24' # Amber 400
-        )
-        self.root.update()  # Force immediate UI update
-        
+            
         self.is_moving = True
         
-        # Start movement in a separate thread
-        self.move_thread = threading.Thread(target=self.move_mouse_loop, daemon=True)
+        # Disable start button (gray it out)
+        self.start_canvas.itemconfig(self.start_rect, fill='#4b5563', outline='#374151')
+        self.start_canvas.itemconfig(self.start_text, fill='#9ca3af')
+        self.start_canvas.unbind("<Button-1>")
+        self.start_canvas.unbind("<Enter>")
+        self.start_canvas.unbind("<Leave>")
+        self.start_canvas.config(cursor="arrow")
+        
+        # Enable stop button (make it red)
+        self.stop_canvas.itemconfig(self.stop_rect, fill='#ef4444', outline='#dc2626')
+        self.stop_canvas.itemconfig(self.stop_text, fill='white')
+        self.stop_canvas.bind("<Button-1>", lambda e: self.stop_moving())
+        self.stop_canvas.bind("<Enter>", lambda e: self.stop_canvas.itemconfig(self.stop_rect, fill='#dc2626'))
+        self.stop_canvas.bind("<Leave>", lambda e: self.stop_canvas.itemconfig(self.stop_rect, fill='#ef4444'))
+        self.stop_canvas.config(cursor="hand2")
+        
+        self.status_label.config(text="Active - Moving", fg=self.colors['success'])
+        self.log("Started movement loop")
+        
+        self.move_thread = threading.Thread(target=self.move_loop, daemon=True)
         self.move_thread.start()
-        
-        # Update status after thread starts
-        self.root.after(100, lambda: self.status_label.config(
-            text="● Active - Moving Cursor",
-            fg=self.colors['success']
-        ))
-    
+
     def stop_moving(self):
-        # Immediate UI feedback
-        self.stop_button.set_state("disabled")
-        self.status_label.config(
-            text="● Stopping...",
-            fg='#fbbf24' # Amber 400
-        )
-        self.root.update()  # Force immediate UI update
-        
         self.is_moving = False
         
-        # Restore UI after stopping
-        self.root.after(200, lambda: (
-            self.start_button.set_state("normal"),
-            self.status_label.config(
-                text="● Inactive",
-                fg=self.colors['text_secondary']
-            )
-        ))
-    
-    def move_mouse_loop(self):
+        # Enable start button (make it green)
+        self.start_canvas.itemconfig(self.start_rect, fill='#22c55e', outline='#16a34a')
+        self.start_canvas.itemconfig(self.start_text, fill='white')
+        self.start_canvas.bind("<Button-1>", lambda e: self.start_moving())
+        self.start_canvas.bind("<Enter>", lambda e: self.start_canvas.itemconfig(self.start_rect, fill='#16a34a'))
+        self.start_canvas.bind("<Leave>", lambda e: self.start_canvas.itemconfig(self.start_rect, fill='#22c55e'))
+        self.start_canvas.config(cursor="hand2")
+        
+        # Disable stop button (gray it out)
+        self.stop_canvas.itemconfig(self.stop_rect, fill='#4b5563', outline='#374151')
+        self.stop_canvas.itemconfig(self.stop_text, fill='#9ca3af')
+        self.stop_canvas.unbind("<Button-1>")
+        self.stop_canvas.unbind("<Enter>")
+        self.stop_canvas.unbind("<Leave>")
+        self.stop_canvas.config(cursor="arrow")
+        
+        self.status_label.config(text="Inactive", fg=self.colors['fg'])
+        self.log("Stopped movement")
+
+    def test_move(self):
+        self.log("Testing single move...")
         try:
-            interval = float(self.interval_var.get())
-            movement_range = int(self.range_var.get())
-        except ValueError:
-            interval = 2.0
-            movement_range = 50
-        
-        print(f"[DEBUG] Mouse movement started - Interval: {interval}s, Range: {movement_range}px")
-        
+            if self.mouse:
+                x, y = self.mouse.position()
+                self.mouse.moveTo(x + 10, y + 10)
+                self.log(f"Moved from ({x},{y}) to ({x+10},{y+10})")
+            else:
+                self.log("Error: Mouse control not initialized")
+        except Exception as e:
+            self.log(f"Test failed: {e}")
+
+    def move_loop(self):
         while self.is_moving:
             try:
-                # Get current mouse position
-                current_x, current_y = self.mouse.position()
-                print(f"[DEBUG] Current position: ({current_x}, {current_y})")
+                interval = float(self.interval_var.get())
+                dist = int(self.range_var.get())
                 
-                # Generate random movement within range
-                dx = random.randint(-movement_range, movement_range)
-                dy = random.randint(-movement_range, movement_range)
+                if self.mouse:
+                    current_x, current_y = self.mouse.position()
+                    dx = random.randint(-dist, dist)
+                    dy = random.randint(-dist, dist)
+                    
+                    # Simple bounds check
+                    try:
+                        w, h = self.mouse.size()
+                    except:
+                        w, h = 1920, 1080
+                        
+                    new_x = max(0, min(current_x + dx, w))
+                    new_y = max(0, min(current_y + dy, h))
+                    
+                    # Try to move
+                    self.mouse.moveTo(new_x, new_y, duration=0.2)
+                    
+                    # VERIFICATION: Check if it actually moved
+                    time.sleep(0.1)
+                    check_x, check_y = self.mouse.position()
+                    
+                    # Allow for small pixel differences
+                    if abs(check_x - new_x) > 5 or abs(check_y - new_y) > 5:
+                        self.root.after(0, lambda: self.log("Warning: Cursor didn't move! Trying fallback..."))
+                        self.fallback_move(new_x, new_y)
+                    else:
+                        self.root.after(0, lambda msg=f"Moved to ({new_x}, {new_y})": self.log(msg))
+                else:
+                    self.root.after(0, lambda: self.log("Error: No mouse control"))
                 
-                new_x = current_x + dx
-                new_y = current_y + dy
-                
-                # Ensure new position is within screen bounds
-                screen_width, screen_height = self.mouse.size()
-                new_x = max(0, min(new_x, screen_width - 1))
-                new_y = max(0, min(new_y, screen_height - 1))
-                
-                print(f"[DEBUG] Moving to: ({new_x}, {new_y}) - Delta: ({dx}, {dy})")
-                
-                # Move mouse smoothly with shorter duration
-                self.mouse.moveTo(new_x, new_y, duration=0.1)
-                
-                print(f"[DEBUG] Move completed. Waiting {interval}s...")
-                
-                # Wait for the specified interval with responsive checking
-                start_time = time.time()
-                while time.time() - start_time < interval and self.is_moving:
-                    time.sleep(0.1)  # Check every 100ms for stop signal
+                time.sleep(interval)
                 
             except Exception as e:
-                print(f"[ERROR] Error moving mouse: {e}")
-                import traceback
-                traceback.print_exc()
-                break
-        
-        print("[DEBUG] Mouse movement stopped")
-    
-    
-    def _on_window_map(self, event):
-        """Handle window restore event"""
-        if self.root.state() == 'normal':
-            print("[DEBUG] Window restored - performing aggressive refresh")
-            
-            # Force a redraw of all widgets
-            self.root.update()
-            
-            # Re-bind events for buttons just in case
-            if hasattr(self, 'start_button'):
-                self.start_button.bind("<ButtonPress-1>", self.start_button._on_press)
-                self.start_button.bind("<ButtonRelease-1>", self.start_button._on_release)
-            if hasattr(self, 'stop_button'):
-                self.stop_button.bind("<ButtonPress-1>", self.stop_button._on_press)
-                self.stop_button.bind("<ButtonRelease-1>", self.stop_button._on_release)
-            
-            # Force focus
-            self.root.focus_force()
+                self.root.after(0, lambda msg=f"Error: {e}": self.log(msg))
+                time.sleep(2)
 
-    def on_closing(self):
-        self.stop_moving()
-        self.root.destroy()
+    def fallback_move(self, x, y):
+        """Fallback to Quartz (CoreGraphics) if pyautogui fails"""
+        if QUARTZ_AVAILABLE:
+            try:
+                # Create an event source
+                source = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState)
+                
+                move_event = Quartz.CGEventCreateMouseEvent(
+                    source, 
+                    Quartz.kCGEventMouseMoved, 
+                    (x, y), 
+                    Quartz.kCGMouseButtonLeft
+                )
+                Quartz.CGEventPost(Quartz.kCGHIDEventTap, move_event)
+                
+                # VERIFY FALLBACK
+                time.sleep(0.1)
+                check_x, check_y = self.mouse.position()
+                
+                if abs(check_x - x) > 5 or abs(check_y - y) > 5:
+                    self.root.after(0, lambda: self.log(f"CRITICAL: Fallback also failed. OS is blocking control."))
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Permission Blocked", 
+                        "macOS is blocking mouse control.\n\n"
+                        "Even the backup method failed.\n"
+                        "Please remove 'Mouse Mover Pro Max' from Accessibility settings and re-add it."
+                    ))
+                else:
+                    self.root.after(0, lambda: self.log(f"Fallback (Quartz) moved to ({x}, {y})"))
+                    
+            except Exception as e:
+                self.root.after(0, lambda msg=f"Quartz fallback failed: {e}": self.log(msg))
+        else:
+             self.root.after(0, lambda: self.log("Error: Quartz not available for fallback"))
 
 def main():
     root = tk.Tk()
     app = MouseMoverApp(root)
-    
-    # Handle window closing
-    root.protocol("WM_DELETE_WINDOW", app.on_closing)
-    
-    # Start the GUI
     root.mainloop()
 
 if __name__ == "__main__":

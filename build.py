@@ -8,8 +8,8 @@ def create_dmg():
     """Create a DMG installer for macOS."""
     print("\nCreating DMG installer for distribution...")
     
-    app_name = "Mouse Mover.app"
-    dmg_name = "Mouse-Mover-macOS.dmg"
+    app_name = "Mouse Jiggler.app"
+    dmg_name = "Mouse-Jiggler.dmg"
     
     if not os.path.exists(f"dist/{app_name}"):
         print(f"Error: {app_name} not found in dist folder")
@@ -78,10 +78,21 @@ def build():
     # Common arguments
     args = [
         'main.py',
-        '--name=Mouse Mover',
+        '--name=Mouse Jiggler',
         '--noconfirm',
         '--clean',
         '--windowed',  # No console window
+        '--hidden-import=pyautogui',
+        '--hidden-import=mouseinfo',
+        '--hidden-import=pyscreeze',
+        '--hidden-import=pymsgbox',
+        '--hidden-import=pytweening',
+        '--hidden-import=pygetwindow',
+        '--hidden-import=pyobjc',
+        '--hidden-import=Quartz',
+        '--hidden-import=AppKit',
+        '--hidden-import=Foundation',
+        '--hidden-import=Cocoa',
     ]
 
     # OS-specific arguments
