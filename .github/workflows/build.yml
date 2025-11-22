@@ -30,8 +30,8 @@ jobs:
     - name: Upload macOS DMG
       uses: actions/upload-artifact@v4
       with:
-        name: Mouse-Mover-macOS
-        path: dist/Mouse-Mover-macOS.dmg
+        name: Mouse-Jiggler-macOS
+        path: dist/Mouse-Jiggler.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -54,5 +54,5 @@ jobs:
     - name: Upload Windows EXE
       uses: actions/upload-artifact@v4
       with:
-        name: Mouse-Mover-Windows
-        path: dist/Mouse Mover.exe
+        name: Mouse-Jiggler-Windows
+        path: dist/Mouse Jiggler.exe
